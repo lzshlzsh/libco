@@ -30,27 +30,33 @@ void* RoutineFunc(void* args)
 {
 	co_enable_hook_sys();
 	int* routineid = (int*)args;
+    struct timeval start, now;
+    gettimeofday(&start, NULL);
+
 	while (true)
 	{
 		char sBuff[128];
-		sprintf(sBuff, "from routineid %d stack addr %p\n", *routineid, sBuff);
+        gettimeofday(&now, NULL);
+        sprintf(sBuff, "[%ld]from routineid %d stack addr %p\n", 
+            (now.tv_sec - start.tv_sec) * 1000 + 
+            (now.tv_usec -start.tv_usec) / 1000, *routineid, sBuff);
 
 		printf("%s", sBuff);
-		poll(NULL, 0, 1000); //sleep 1s
+		poll(NULL, 0, 1000 + (*routineid * 100)); //sleep 1s
 	}
 	return NULL;
 }
 
 int main()
 {
-	stShareStack_t* share_stack= co_alloc_sharestack(1, 1024 * 128);
+	stShareStack_t* share_stack= co_alloc_sharestack(2, 1024 * 128);
 	stCoRoutineAttr_t attr;
 	attr.stack_size = 0;
 	attr.share_stack = share_stack;
 
-	stCoRoutine_t* co[2];
-	int routineid[2];
-	for (int i = 0; i < 2; i++)
+	stCoRoutine_t* co[10];
+	int routineid[10];
+	for (int i = 0; i < 10; i++)
 	{
 		routineid[i] = i;
 		co_create(&co[i], &attr, RoutineFunc, routineid + i);

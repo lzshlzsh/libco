@@ -52,10 +52,6 @@ struct stCoRoutineEnv_t
 	stCoRoutine_t *pCallStack[ 128 ];
 	int iCallStackSize;
 	stCoEpoll_t *pEpoll;
-
-	//for copy stack log lastco and nextco
-	stCoRoutine_t* pending_co;
-	stCoRoutine_t* occupy_co;
 };
 //int socket(int domain, int type, int protocol);
 void co_log_err( const char *fmt,... )
@@ -588,26 +584,16 @@ void save_stack_buffer(stCoRoutine_t* occupy_co)
 
 void co_swap(stCoRoutine_t* curr, stCoRoutine_t* pending_co)
 {
- 	stCoRoutineEnv_t* env = co_get_curr_thread_env();
-
 	//get curr stack sp
 	char c;
 	curr->stack_sp= &c;
 
-	if (!pending_co->cIsShareStack)
-	{
-		env->pending_co = NULL;
-		env->occupy_co = NULL;
-	}
-	else 
-	{
-		env->pending_co = pending_co;
+	if (pending_co->cIsShareStack) {
 		//get last occupy co on the same stack mem
 		stCoRoutine_t* occupy_co = pending_co->stack_mem->occupy_co;
 		//set pending co to occupy thest stack mem;
 		pending_co->stack_mem->occupy_co = pending_co;
 
-		env->occupy_co = occupy_co;
 		if (occupy_co && occupy_co != pending_co)
 		{
 			save_stack_buffer(occupy_co);
@@ -617,19 +603,15 @@ void co_swap(stCoRoutine_t* curr, stCoRoutine_t* pending_co)
 	//swap context
 	coctx_swap(&(curr->ctx),&(pending_co->ctx) );
 
-	//stack buffer may be overwrite, so get again;
-	stCoRoutineEnv_t* curr_env = co_get_curr_thread_env();
-	stCoRoutine_t* update_occupy_co =  curr_env->occupy_co;
-	stCoRoutine_t* update_pending_co = curr_env->pending_co;
-	
-	if (update_occupy_co && update_pending_co && update_occupy_co != update_pending_co)
-	{
-		//resume stack buffer
-		if (update_pending_co->save_buffer && update_pending_co->save_size > 0)
-		{
-			memcpy(update_pending_co->stack_sp, update_pending_co->save_buffer, update_pending_co->save_size);
-		}
-	}
+    stCoRoutine_t *curr_co = GetCurrThreadCo();
+    if (curr_co->cIsShareStack && 
+        curr_co->save_buffer && curr_co->save_size > 0) {
+        //resume stack buffer
+        memcpy(curr_co->stack_sp, curr_co->save_buffer, curr_co->save_size);
+        free(curr_co->save_buffer);
+        curr_co->save_buffer = NULL;
+        curr_co->save_size = 0;
+    }
 }
 
 
@@ -701,9 +683,6 @@ void co_init_curr_thread_env()
 	env->iCallStackSize = 0;
 	struct stCoRoutine_t *self = co_create_env( env, NULL, NULL,NULL );
 	self->cIsMain = 1;
-
-	env->pending_co = NULL;
-	env->occupy_co = NULL;
 
 	coctx_init( &self->ctx );
 

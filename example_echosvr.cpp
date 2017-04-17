@@ -77,7 +77,11 @@ static void *readwrite_routine( void *arg )
 			struct pollfd pf = { 0 };
 			pf.fd = fd;
 			pf.events = (POLLIN|POLLERR|POLLHUP);
-			co_poll( co_get_epoll_ct(),&pf,1,1000);
+			int err = co_poll( co_get_epoll_ct(),&pf,1,1000);
+
+            if (err <= 0) {
+                continue;
+            }
 
 			int ret = read( fd,buf,sizeof(buf) );
 			if( ret > 0 )
