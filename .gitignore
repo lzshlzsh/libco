@@ -12,6 +12,7 @@ example_echosvr
 example_poll
 example_specific
 example_thread
+example_stackoverflow
 lib/
 solib/
 

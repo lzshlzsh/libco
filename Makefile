@@ -20,8 +20,8 @@
 COMM_MAKE = 1
 COMM_ECHO = 1
 version=0.5
-v=debug
-#v=release
+#v=debug
+v=release
 include co.mk
 
 ########## options ##########
