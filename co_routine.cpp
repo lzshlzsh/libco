@@ -38,6 +38,7 @@
 #include <arpa/inet.h>
 #include <sys/syscall.h>
 #include <unistd.h>
+#include <sys/mman.h>
 
 extern "C"
 {
@@ -257,12 +258,37 @@ void inline Join( TLink*apLink,TLink *apOther )
 /////////////////for copy stack //////////////////////////
 stStackMem_t* co_alloc_stackmem(unsigned int stack_size)
 {
-	stStackMem_t* stack_mem = (stStackMem_t*)malloc(sizeof(stStackMem_t));
+    stStackMem_t* stack_mem = (stStackMem_t*)malloc(sizeof(stStackMem_t));
+
+#ifdef USE_MMAP_STACK
+    const long page_size = sysconf(_SC_PAGE_SIZE);
+    const size_t stack_size_aligned = (stack_size + page_size - 1) & 
+        ~(page_size - 1); 
+
+    void *addr = mmap(NULL, stack_size_aligned + page_size, 
+        PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (MAP_FAILED == addr) {
+        free(stack_mem);
+        return NULL;
+    }
+
+    if (mprotect(addr, page_size, PROT_NONE)) {
+        munmap(addr, stack_size_aligned + page_size);
+        free(stack_mem);
+        return NULL;
+    }
+
+	stack_mem->occupy_co= NULL;
+	stack_mem->stack_size = stack_size_aligned;
+	stack_mem->stack_buffer = reinterpret_cast<char *>(addr) + page_size;
+	stack_mem->stack_bp = stack_mem->stack_buffer + stack_size_aligned;
+#else
 	stack_mem->occupy_co= NULL;
 	stack_mem->stack_size = stack_size;
 	stack_mem->stack_buffer = (char*)malloc(stack_size);
 	stack_mem->stack_bp = stack_mem->stack_buffer + stack_size;
-	return stack_mem;
+#endif
+    return stack_mem;
 }
 
 stShareStack_t* co_alloc_sharestack(int count, int stack_size)
